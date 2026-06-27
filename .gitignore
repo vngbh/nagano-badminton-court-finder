@@ -1,0 +1,10 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+coords_cache.json
+
+# misc
+.DS_Store
+*.pem
+.env*
