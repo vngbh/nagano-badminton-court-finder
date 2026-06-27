@@ -3,9 +3,8 @@ import requests
 import re
 import json
 import math
-import time
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://city.nagano.nagano.machikagi-remote.jp"
@@ -175,12 +174,22 @@ def sort_key(r: dict):
     return (dist, r["施設名"], r["部屋"], r["開始"])
 
 
+# ── helpers ─────────────────────────────────────────────────────────────────
+
+def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtime) -> bool:
+    """True when the slot [start_str, end_str] lies completely within [f_start, f_end]."""
+    sh, sm = map(int, start_str.split(":"))
+    eh, em = map(int, end_str.split(":"))
+    return dtime(sh, sm) >= f_start and dtime(eh, em) <= f_end
+
+
 # ── UI ──────────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="長野 バドミントンコート空き検索")
 st.title("長野市 バドミントンコート 空き検索")
 st.caption("基準: 信州大学工学部 / データ取得元: 長野市 施設案内予約システム（ログイン不要）")
 
+# ── Date & refresh ───────────────────────────────────────────────────────────
 col1, col2 = st.columns([3, 1])
 with col1:
     selected_date = st.date_input(
@@ -195,6 +204,31 @@ with col2:
         discover_rooms.clear()
         st.rerun()
 
+# ── Filters ──────────────────────────────────────────────────────────────────
+with st.expander("フィルター", expanded=True):
+    f_col1, f_col2 = st.columns(2)
+
+    with f_col1:
+        time_range = st.slider(
+            "利用時間帯",
+            min_value=dtime(6, 0),
+            max_value=dtime(23, 0),
+            value=(dtime(8, 0), dtime(22, 0)),
+            step=timedelta(minutes=30),
+            format="HH:mm",
+        )
+        filter_time_start, filter_time_end = time_range
+
+    with f_col2:
+        max_dist_km = st.slider(
+            "最大距離 (km)  ※左端は常に 0.0 km",
+            min_value=0.0,
+            max_value=30.0,
+            value=20.0,
+            step=0.5,
+        )
+
+# ── Search ───────────────────────────────────────────────────────────────────
 if st.button("空きを検索", type="primary", use_container_width=True):
     date_str = selected_date.strftime("%Y-%m-%d")
     rooms = discover_rooms()
@@ -203,36 +237,46 @@ if st.button("空きを検索", type="primary", use_container_width=True):
         st.error("施設情報を取得できませんでした。しばらくしてから再試行してください。")
         st.stop()
 
+    # Pre-filter rooms by distance before fetching slots
+    rooms_in_range = [
+        r for r in rooms
+        if r["distance_km"] is None or r["distance_km"] <= max_dist_km
+    ]
+
     results: list[dict] = []
     bar = st.progress(0)
     status = st.empty()
 
     with ThreadPoolExecutor(max_workers=15) as executor:
-        futures = {executor.submit(fetch_slots, r, date_str): r for r in rooms}
+        futures = {executor.submit(fetch_slots, r, date_str): r for r in rooms_in_range}
         for i, future in enumerate(as_completed(futures)):
             room = futures[future]
             for slot in future.result():
+                s_start = slot["start"][11:16]
+                s_end   = slot["end"][11:16]
+                if not slot_in_time_range(s_start, s_end, filter_time_start, filter_time_end):
+                    continue
                 price = extract_price(slot.get("title", ""))
                 results.append(
                     {
                         "施設名": room["fname"],
                         "部屋": room["rname"],
-                        "開始": slot["start"][11:16],
-                        "終了": slot["end"][11:16],
+                        "開始": s_start,
+                        "終了": s_end,
                         "料金": slot.get("title", "").split("\n")[0],
                         "価格": price,
                         "距離(km)": room["distance_km"],
                         "予約": f"{BASE_URL}/rooms/{room['rid']}/reservation_calendar?date={date_str}",
                     }
                 )
-            bar.progress((i + 1) / len(rooms))
-            status.text(f"確認中 {i + 1}/{len(rooms)} 室")
+            bar.progress((i + 1) / len(rooms_in_range))
+            status.text(f"確認中 {i + 1}/{len(rooms_in_range)} 室")
 
     bar.empty()
     status.empty()
 
     if not results:
-        st.warning(f"{date_str} は空き枠が見つかりませんでした")
+        st.warning(f"{date_str} は条件に合う空き枠が見つかりませんでした")
         st.stop()
 
     results.sort(key=sort_key)
@@ -250,7 +294,7 @@ if st.button("空きを検索", type="primary", use_container_width=True):
             container.info("該当なし")
             return
         for r in rows:
-            dist_str = f"{r['距離(km)']} km" if r["距離(km)"] is not None else "不明"
+            dist_str = f"{r['距離(km)']} km" if r["距離(km)"] is not None else "距離不明"
             with container.expander(f"{r['施設名']}  |  {dist_str}", expanded=False):
                 cols = st.columns([2, 2, 2, 2])
                 cols[0].write(r["部屋"])
