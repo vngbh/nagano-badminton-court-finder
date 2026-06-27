@@ -8,6 +8,9 @@ from datetime import date, datetime, time as dtime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://city.nagano.nagano.machikagi-remote.jp"
+
+# Rooms whose names contain any of these are not gymnasiums despite being tagged tag=1
+NON_GYM_KEYWORDS = ["ホール", "会議室", "和室", "教室", "料理", "音楽", "調理", "講習", "実習", "図書"]
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
@@ -117,10 +120,10 @@ def discover_rooms() -> list[dict]:
                 else None
             )
 
-            # Get rooms for this facility
+            # Get rooms for this facility — tag=1 filters to 体育館 rooms only
             resp2 = requests.get(
                 f"{BASE_URL}/rooms",
-                params={"facility_id": fid},
+                params={"facility_id": fid, "tag": "1"},
                 headers=HEADERS,
                 timeout=15,
             )
@@ -128,12 +131,15 @@ def discover_rooms() -> list[dict]:
                 r'<a class="trans" href="/rooms/(\d+)">(.*?)</a>', resp2.text
             )
             for rid, rname in room_matches:
+                rname = rname.strip()
+                if any(kw in rname for kw in NON_GYM_KEYWORDS):
+                    continue
                 rooms.append(
                     {
                         "fid": fid,
                         "fname": fname,
                         "rid": rid,
-                        "rname": rname.strip(),
+                        "rname": rname,
                         "sid": fid,  # requested_setting_id == facility_id
                         "address": address,
                         "distance_km": distance_km,
