@@ -13,9 +13,9 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# 信州大学工学部（長野市若里4丁目17-1）
-REF_LAT = 36.6443
-REF_LON = 138.1905
+# 信州大学工学部（長野市若里4丁目17-1）— 国土地理院で確認済み
+REF_LAT = 36.63179
+REF_LON = 138.187378
 
 COORDS_FILE = os.path.join(os.path.dirname(__file__), "coords_cache.json")
 
@@ -46,23 +46,19 @@ def save_coords_cache(cache: dict) -> None:
 
 
 def geocode(address: str, cache: dict) -> tuple[float, float] | None:
-    if address in cache:
+    """Geocode a Japanese address using 国土地理院 (GSI Japan) — no API key needed."""
+    if address in cache and cache[address] is not None:
         return cache[address]
     try:
         resp = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={
-                "q": f"長野県{address}",
-                "format": "json",
-                "countrycodes": "jp",
-                "limit": 1,
-            },
-            headers={"User-Agent": "nagano-court-finder/1.0 (local personal tool)"},
+            "https://msearch.gsi.go.jp/address-search/AddressSearch",
+            params={"q": address},
             timeout=10,
         )
         results = resp.json()
         if results:
-            coords = (float(results[0]["lat"]), float(results[0]["lon"]))
+            lon, lat = results[0]["geometry"]["coordinates"]
+            coords = (float(lat), float(lon))
             cache[address] = coords
             return coords
     except Exception:
@@ -111,11 +107,9 @@ def discover_rooms() -> list[dict]:
             fname = re.sub(r"\s+", " ", fname_m.group(1)).strip()
             address = addr_m.group(1).strip() if addr_m else None
 
-            # Geocode
+            # Geocode via 国土地理院
             coords = None
             if address:
-                if address not in coords_cache:
-                    time.sleep(1)  # Nominatim: 1 req/sec
                 coords = geocode(address, coords_cache)
 
             distance_km = (
