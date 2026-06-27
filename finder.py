@@ -78,9 +78,15 @@ def extract_price(title: str) -> int | None:
     return None
 
 
-@st.cache_data(ttl=86400, show_spinner="施設・部屋情報を取得中...")
 def discover_rooms() -> list[dict]:
-    """Fetch all gymnasium facilities and rooms. Cached 24 h."""
+    if "rooms" in st.session_state:
+        return st.session_state["rooms"]
+    with st.spinner("施設・部屋情報を取得中..."):
+        st.session_state["rooms"] = _fetch_rooms()
+    return st.session_state["rooms"]
+
+
+def _fetch_rooms() -> list[dict]:
     rooms = []
     coords_cache = load_coords_cache()
 
@@ -190,6 +196,21 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
 
 st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="centered")
 
+# ── Auth ─────────────────────────────────────────────────────────────────────
+
+if not st.session_state.get("authenticated"):
+    st.subheader("ログイン")
+    with st.form("login_form"):
+        username = st.text_input("ID")
+        password = st.text_input("パスワード", type="password")
+        if st.form_submit_button("ログイン", type="primary", use_container_width=True):
+            if username == st.secrets["auth"]["username"] and password == st.secrets["auth"]["password"]:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("IDまたはパスワードが違います")
+    st.stop()
+
 with st.sidebar:
     st.header("検索条件")
 
@@ -221,7 +242,7 @@ with st.sidebar:
 
     st.divider()
     if st.button("施設一覧を更新", use_container_width=True):
-        discover_rooms.clear()
+        st.session_state.pop("rooms", None)
         st.rerun()
     st.markdown("<span style='color:gray;font-size:0.72rem'>施設・部屋情報は 24 時間キャッシュされます</span>", unsafe_allow_html=True)
 
