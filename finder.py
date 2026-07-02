@@ -328,18 +328,18 @@ st.markdown(f"**{date_str}（{wd}）**")
 paid_fnames = {r["施設名"] for r in paid}
 free_fnames = {r["施設名"] for r in free}
 
-facility_number: dict[str, int] = {}
+seen_fnames = set()
 map_points = []
 for r in results:
     fname = r["施設名"]
-    if fname in facility_number or r["lat"] is None or r["lon"] is None:
+    if fname in seen_fnames or r["lat"] is None or r["lon"] is None:
         continue
-    facility_number[fname] = len(facility_number) + 1
+    seen_fnames.add(fname)
     color = COLOR_PAID if fname in paid_fnames else COLOR_FREE
     map_points.append({
         "lat": r["lat"],
         "lon": r["lon"],
-        "label": f"{facility_number[fname]}. {fname}",
+        "label": fname,
         "color": color,
     })
 
@@ -386,9 +386,7 @@ def render_results(rows: list[dict], container) -> None:
         if r["施設名"] != prev:
             dist = r["距離(km)"]
             dist_str = f"{dist} km" if dist is not None else "距離不明"
-            num = facility_number.get(r["施設名"])
-            num_str = f"№{num} " if num else ""
-            container.markdown(f"**{num_str}{r['施設名']}** &nbsp; `{dist_str}`")
+            container.markdown(f"**{r['施設名']}** &nbsp; `{dist_str}`")
             prev = r["施設名"]
         c1, c2, c3, c4 = container.columns([3, 2, 2, 1])
         c1.write(r["部屋"])
