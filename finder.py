@@ -215,8 +215,8 @@ st.markdown(
     """<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
     #MainMenu, header, footer {visibility: hidden;}
-    [data-testid="stApp"] {
-        font-family: 'Meiryo', 'BIZ UDPGothic', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    [data-testid="stApp"] * {
+        font-family: 'BIZ UDPGothic', 'Meiryo', 'Hiragino Sans', 'Noto Sans JP', sans-serif !important;
     }
     </style>""",
     unsafe_allow_html=True,
@@ -385,7 +385,7 @@ if map_points:
     # Wrapping in quotes keeps pydeck from mangling it into a data-field accessor.
     label_chars = "".join(sorted({c for p in all_points for c in p["label"]}))
     quoted_char_set = "'" + label_chars + "'"
-    quoted_font_family = '"' + "'Meiryo', 'BIZ UDPGothic', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif" + '"'
+    quoted_font_family = '"' + "'BIZ UDPGothic', 'Meiryo', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif" + '"'
 
     line_layer = pdk.Layer(
         "PathLayer",
