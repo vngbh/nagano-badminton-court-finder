@@ -418,7 +418,7 @@ if map_points:
         .map-date-badge {
             position: absolute;
             top: 16px;
-            left: 32px;
+            left: 16px;
             z-index: 1000;
             background-color: #3a3a3a;
             color: white;
