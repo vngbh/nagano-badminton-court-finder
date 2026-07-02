@@ -245,7 +245,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-col_date, col_time, col_dist, col_search, col_refresh = st.columns([2, 3, 2, 1, 1])
+col_date, col_time, col_dist, col_search, col_refresh = st.columns(
+    [2, 3, 2, 1, 1], vertical_alignment="bottom"
+)
 with col_date:
     selected_date = st.date_input(
         "日付",
@@ -271,72 +273,79 @@ with col_dist:
         step=0.5,
     )
 with col_search:
-    st.write("")
     search = st.button("検索", type="primary", use_container_width=True)
 with col_refresh:
-    st.write("")
     if st.button("施設一覧を更新", use_container_width=True):
         st.session_state.pop("rooms", None)
         st.rerun()
 
-if not search:
+if search:
+    date_str = selected_date.strftime("%Y-%m-%d")
+    rooms = discover_rooms()
+
+    if not rooms:
+        st.error("施設情報を取得できませんでした。しばらくしてから再試行してください。")
+        st.stop()
+
+    rooms_in_range = [
+        r for r in rooms
+        if r["distance_km"] is None or r["distance_km"] <= max_dist_km
+    ]
+
+    results: list[dict] = []
+    bar = st.progress(0, text="確認中...")
+
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        futures = {executor.submit(fetch_slots, r, date_str): r for r in rooms_in_range}
+        for i, future in enumerate(as_completed(futures)):
+            room = futures[future]
+            for slot in future.result():
+                s_start = slot["start"][11:16]
+                s_end   = slot["end"][11:16]
+                if not slot_in_time_range(s_start, s_end, filter_time_start, filter_time_end):
+                    continue
+                price = extract_price(slot.get("title", ""))
+                results.append({
+                    "施設名":   room["fname"],
+                    "部屋":     room["rname"],
+                    "開始":     s_start,
+                    "終了":     s_end,
+                    "料金":     slot.get("title", "").split("\n")[0],
+                    "価格":     price,
+                    "距離(km)": room["distance_km"],
+                    "lat":      room["lat"],
+                    "lon":      room["lon"],
+                    "予約URL":  f"{BASE_URL}/rooms/{room['rid']}/reservation_calendar?date={date_str}",
+                })
+            bar.progress((i + 1) / len(rooms_in_range),
+                         text=f"確認中 {i + 1}/{len(rooms_in_range)} 室")
+
+    bar.empty()
+    results.sort(key=sort_key)
+
+    weekday_jp = ["月", "火", "水", "木", "金", "土", "日"]
+    st.session_state["last_search"] = {
+        "results": results,
+        "date_str": date_str,
+        "weekday": weekday_jp[selected_date.weekday()],
+    }
+
+# 検索ボタンを押していなくても、直前の検索結果はそのまま表示を続ける
+# （日付・時間を変えただけで結果が消えるとUXが悪いため）
+if "last_search" not in st.session_state:
+    st.info("日付・条件を選んで「検索」を押してください")
     st.stop()
 
-# ── Search ───────────────────────────────────────────────────────────────────
-
-date_str = selected_date.strftime("%Y-%m-%d")
-rooms = discover_rooms()
-
-if not rooms:
-    st.error("施設情報を取得できませんでした。しばらくしてから再試行してください。")
-    st.stop()
-
-rooms_in_range = [
-    r for r in rooms
-    if r["distance_km"] is None or r["distance_km"] <= max_dist_km
-]
-
-results: list[dict] = []
-bar = st.progress(0, text="確認中...")
-
-with ThreadPoolExecutor(max_workers=15) as executor:
-    futures = {executor.submit(fetch_slots, r, date_str): r for r in rooms_in_range}
-    for i, future in enumerate(as_completed(futures)):
-        room = futures[future]
-        for slot in future.result():
-            s_start = slot["start"][11:16]
-            s_end   = slot["end"][11:16]
-            if not slot_in_time_range(s_start, s_end, filter_time_start, filter_time_end):
-                continue
-            price = extract_price(slot.get("title", ""))
-            results.append({
-                "施設名":   room["fname"],
-                "部屋":     room["rname"],
-                "開始":     s_start,
-                "終了":     s_end,
-                "料金":     slot.get("title", "").split("\n")[0],
-                "価格":     price,
-                "距離(km)": room["distance_km"],
-                "lat":      room["lat"],
-                "lon":      room["lon"],
-                "予約URL":  f"{BASE_URL}/rooms/{room['rid']}/reservation_calendar?date={date_str}",
-            })
-        bar.progress((i + 1) / len(rooms_in_range),
-                     text=f"確認中 {i + 1}/{len(rooms_in_range)} 室")
-
-bar.empty()
+results = st.session_state["last_search"]["results"]
+date_str = st.session_state["last_search"]["date_str"]
+wd = st.session_state["last_search"]["weekday"]
 
 if not results:
     st.warning(f"{date_str} は条件に合う空き枠が見つかりませんでした")
     st.stop()
 
-results.sort(key=sort_key)
 paid = [r for r in results if r["価格"] is None or r["価格"] > 0]
 free = [r for r in results if r["価格"] == 0]
-
-weekday_jp = ["月", "火", "水", "木", "金", "土", "日"]
-wd = weekday_jp[selected_date.weekday()]
-st.markdown(f"**{date_str}（{wd}）**")
 
 # ── Map ──────────────────────────────────────────────────────────────────────
 
@@ -401,11 +410,34 @@ if map_points:
         longitude=sum(p["lon"] for p in all_points) / len(all_points),
         zoom=11,
     )
-    st.pydeck_chart(pdk.Deck(
-        layers=[line_layer, badge_layer],
-        initial_view_state=view_state,
-        map_style=pdk.map_styles.LIGHT_NO_LABELS,
-    ))
+    st.markdown(
+        """<style>
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.map-date-badge),
+        div[data-testid="stVerticalBlock"]:has(.map-date-badge) {
+            position: relative;
+        }
+        .map-date-badge {
+            position: absolute;
+            top: 8px;
+            left: 24px;
+            z-index: 1000;
+            background-color: #dc2828;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
+    with st.container():
+        st.markdown(f'<div class="map-date-badge">{date_str}（{wd}）</div>', unsafe_allow_html=True)
+        st.pydeck_chart(pdk.Deck(
+            layers=[line_layer, badge_layer],
+            initial_view_state=view_state,
+            map_style=pdk.map_styles.LIGHT_NO_LABELS,
+        ))
 
     def legend_swatch(color: list[int], label: str) -> str:
         r, g, b = color
