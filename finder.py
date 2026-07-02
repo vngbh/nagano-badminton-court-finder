@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 BASE_URL = "https://city.nagano.nagano.machikagi-remote.jp"
 
 # Rooms whose names contain any of these are not gymnasiums despite being tagged tag=1
-NON_GYM_KEYWORDS = ["ホール", "会議室", "和室", "教室", "料理", "音楽", "調理", "講習", "実習", "図書"]
+NON_GYM_KEYWORDS = ["ホール", "会議室", "和室", "教室", "料理", "音楽", "調理", "講習", "実習", "図書", "ギャラリー"]
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
@@ -149,6 +149,8 @@ def _fetch_rooms() -> list[dict]:
                         "sid": fid,  # requested_setting_id == facility_id
                         "address": address,
                         "distance_km": distance_km,
+                        "lat": coords[0] if coords else None,
+                        "lon": coords[1] if coords else None,
                     }
                 )
 
@@ -195,6 +197,11 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="centered")
+
+st.markdown(
+    "<style>#MainMenu, header, footer {visibility: hidden;}</style>",
+    unsafe_allow_html=True,
+)
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -290,6 +297,8 @@ with ThreadPoolExecutor(max_workers=15) as executor:
                 "料金":     slot.get("title", "").split("\n")[0],
                 "価格":     price,
                 "距離(km)": room["distance_km"],
+                "lat":      room["lat"],
+                "lon":      room["lon"],
                 "予約URL":  f"{BASE_URL}/rooms/{room['rid']}/reservation_calendar?date={date_str}",
             })
         bar.progress((i + 1) / len(rooms_in_range),
@@ -308,6 +317,13 @@ free = [r for r in results if r["価格"] == 0]
 weekday_jp = ["月", "火", "水", "木", "金", "土", "日"]
 wd = weekday_jp[selected_date.weekday()]
 st.markdown(f"**{date_str}（{wd}）** — 有料 {len(paid)} 件 / 無料 {len(free)} 件")
+
+# ── Map ──────────────────────────────────────────────────────────────────────
+
+map_points = {(r["lat"], r["lon"]) for r in results if r["lat"] is not None and r["lon"] is not None}
+if map_points:
+    st.map([{"lat": lat, "lon": lon} for lat, lon in map_points], size=40)
+
 st.divider()
 
 # ── Results ──────────────────────────────────────────────────────────────────
