@@ -190,7 +190,9 @@ def fetch_slots(room: dict, date_str: str) -> list[dict]:
         return [
             e
             for e in events
-            if e.get("eventStatus") == "reservation" and date_str in e.get("start", "")
+            if e.get("eventStatus") == "reservation"
+            and date_str in e.get("start", "")
+            and e.get("type") != "raffle_apply"
         ]
     except Exception:
         return []
