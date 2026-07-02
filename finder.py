@@ -207,9 +207,9 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
     return dtime(sh, sm) >= f_start and dtime(eh, em) <= f_end
 
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
+# ── Page setup ───────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="centered")
+st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="wide")
 
 st.markdown(
     "<style>#MainMenu, header, footer {visibility: hidden;}</style>",
@@ -231,15 +231,19 @@ if not st.session_state.get("authenticated"):
                 st.error("IDまたはパスワードが違います")
     st.stop()
 
-with st.sidebar:
-    st.header("検索条件")
+# ── Main ─────────────────────────────────────────────────────────────────────
 
+st.subheader("長野市バドミントンコート空き検索")
+st.caption("距離基準：長野駅")
+
+col_date, col_time, col_dist, col_search = st.columns([2, 3, 2, 1])
+with col_date:
     selected_date = st.date_input(
         "日付",
         min_value=date.today(),
         value=date.today() + timedelta(days=1),
     )
-
+with col_time:
     time_range = st.slider(
         "利用時間帯",
         min_value=dtime(6, 0),
@@ -249,7 +253,7 @@ with st.sidebar:
         format="HH:mm",
     )
     filter_time_start, filter_time_end = time_range
-
+with col_dist:
     max_dist_km = st.slider(
         "最大距離 (km)",
         min_value=0.0,
@@ -257,20 +261,15 @@ with st.sidebar:
         value=20.0,
         step=0.5,
     )
-
+with col_search:
+    st.write("")
     search = st.button("検索", type="primary", use_container_width=True)
 
-    st.divider()
+with st.expander("施設一覧の更新"):
     if st.button("施設一覧を更新", use_container_width=True):
         st.session_state.pop("rooms", None)
         st.rerun()
-    st.markdown("<span style='color:gray;font-size:0.72rem'>施設・部屋情報は 24 時間キャッシュされます</span>", unsafe_allow_html=True)
-
-
-# ── Main ─────────────────────────────────────────────────────────────────────
-
-st.subheader("長野市バドミントンコート空き検索")
-st.caption("距離基準：長野駅")
+    st.caption("施設・部屋情報は 24 時間キャッシュされます")
 
 if not search:
     st.stop()
@@ -353,7 +352,7 @@ for r in results:
 
 if map_points:
     station_points = [
-        {"lat": lat, "lon": lon, "label": name}
+        {"lat": lat, "lon": lon, "label": name, "color": COLOR_STATION}
         for name, lat, lon in STATIONS
     ]
     all_points = map_points + station_points
@@ -373,30 +372,9 @@ if map_points:
         get_width=3,
         width_min_pixels=2,
     )
-    marker_layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=map_points,
-        get_position="[lon, lat]",
-        get_radius=180,
-        get_fill_color="color",
-        pickable=True,
-    )
-    label_layer = pdk.Layer(
+    badge_layer = pdk.Layer(
         "TextLayer",
-        data=map_points,
-        get_position="[lon, lat]",
-        get_text="label",
-        get_size=10,
-        get_color="color",
-        get_pixel_offset=[0, -14],
-        get_alignment_baseline="'bottom'",
-        character_set=quoted_char_set,
-        font_family=quoted_font_family,
-        font_weight=700,
-    )
-    station_layer = pdk.Layer(
-        "TextLayer",
-        data=station_points,
+        data=all_points,
         get_position="[lon, lat]",
         get_text="label",
         get_size=10,
@@ -406,8 +384,9 @@ if map_points:
         font_family=quoted_font_family,
         font_weight=700,
         background=True,
-        get_background_color=COLOR_STATION,
+        get_background_color="color",
         background_padding=[6, 4],
+        pickable=True,
     )
     view_state = pdk.ViewState(
         latitude=sum(p["lat"] for p in all_points) / len(all_points),
@@ -415,24 +394,24 @@ if map_points:
         zoom=11,
     )
     st.pydeck_chart(pdk.Deck(
-        layers=[line_layer, marker_layer, label_layer, station_layer],
+        layers=[line_layer, badge_layer],
         initial_view_state=view_state,
         map_style=pdk.map_styles.LIGHT_NO_LABELS,
     ))
 
-    def legend_dot(color: list[int], label: str) -> str:
+    def legend_swatch(color: list[int], label: str) -> str:
         r, g, b = color
         return (
-            f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;'
+            f'<span style="display:inline-block;width:16px;height:10px;border-radius:2px;'
             f'background-color:rgb({r},{g},{b});margin-right:4px;"></span>'
             f'<span style="margin-right:16px;">{label}</span>'
         )
 
     st.markdown(
         f'<div style="font-size:0.8rem;color:gray;">'
-        f'{legend_dot(COLOR_PAID, "有料")}'
-        f'{legend_dot(COLOR_FREE, "無料")}'
-        f'{legend_dot(COLOR_STATION, "駅")}'
+        f'{legend_swatch(COLOR_PAID, "有料")}'
+        f'{legend_swatch(COLOR_FREE, "無料")}'
+        f'{legend_swatch(COLOR_STATION, "駅")}'
         f'</div>',
         unsafe_allow_html=True,
     )
