@@ -16,9 +16,16 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# 長野駅 — 距離の基準点、地図の目印として常に表示
-REF_LAT = STATION_LAT = 36.643809
-REF_LON = STATION_LON = 138.187750
+# 長野駅 — 距離の基準点
+REF_LAT = 36.643809
+REF_LON = 138.187750
+
+# 地図に常に表示する駅（目印用、国土地理院で概算確認）— 信越本線の南北順
+STATIONS = [
+    ("篠ノ井駅", 36.580475, 138.143280),
+    ("長野駅", 36.643809, 138.187750),
+    ("北長野駅", 36.649345, 138.242966),
+]
 
 COLOR_PAID = [220, 40, 40]
 COLOR_FREE = [46, 160, 67]
@@ -344,9 +351,20 @@ for r in results:
     })
 
 if map_points:
-    station_point = {"lat": STATION_LAT, "lon": STATION_LON, "label": "長野駅", "color": COLOR_STATION}
-    all_points = map_points + [station_point]
+    station_points = [
+        {"lat": lat, "lon": lon, "label": name, "color": COLOR_STATION}
+        for name, lat, lon in STATIONS
+    ]
+    all_points = map_points + station_points
 
+    line_layer = pdk.Layer(
+        "PathLayer",
+        data=[{"path": [[lon, lat] for _, lat, lon in STATIONS]}],
+        get_path="path",
+        get_color=COLOR_STATION,
+        get_width=3,
+        width_min_pixels=2,
+    )
     marker_layer = pdk.Layer(
         "ScatterplotLayer",
         data=all_points,
@@ -370,8 +388,24 @@ if map_points:
         longitude=sum(p["lon"] for p in all_points) / len(all_points),
         zoom=11,
     )
-    st.pydeck_chart(pdk.Deck(layers=[marker_layer, label_layer], initial_view_state=view_state))
-    st.caption("🔴 有料あり　🟢 無料のみ　🔵 長野駅")
+    st.pydeck_chart(pdk.Deck(layers=[line_layer, marker_layer, label_layer], initial_view_state=view_state))
+
+    def legend_dot(color: list[int], label: str) -> str:
+        r, g, b = color
+        return (
+            f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;'
+            f'background-color:rgb({r},{g},{b});margin-right:4px;"></span>'
+            f'<span style="margin-right:16px;">{label}</span>'
+        )
+
+    st.markdown(
+        f'<div style="font-size:0.8rem;color:gray;">'
+        f'{legend_dot(COLOR_PAID, "有料")}'
+        f'{legend_dot(COLOR_FREE, "無料")}'
+        f'{legend_dot(COLOR_STATION, "駅")}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 st.divider()
 
