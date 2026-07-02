@@ -388,12 +388,13 @@ if map_points:
         data=all_points,
         get_position="[lon, lat]",
         get_text="label",
-        get_size=7,
+        get_size=10,
         get_color="color",
         get_pixel_offset=[0, -14],
         get_alignment_baseline="'bottom'",
         character_set=quoted_char_set,
         font_family=quoted_font_family,
+        font_weight=700,
     )
     view_state = pdk.ViewState(
         latitude=sum(p["lat"] for p in all_points) / len(all_points),
