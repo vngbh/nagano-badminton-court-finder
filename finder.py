@@ -303,7 +303,6 @@ with ThreadPoolExecutor(max_workers=15) as executor:
                 continue
             price = extract_price(slot.get("title", ""))
             results.append({
-                "fid":      room["fid"],
                 "施設名":   room["fname"],
                 "部屋":     room["rname"],
                 "開始":     s_start,
@@ -348,13 +347,13 @@ for r in results:
     map_points.append({
         "lat": r["lat"],
         "lon": r["lon"],
-        "label": str(r["fid"]),
+        "label": fname.split(" ", 1)[0],
         "color": color,
     })
 
 if map_points:
     station_points = [
-        {"lat": lat, "lon": lon, "label": name, "color": COLOR_STATION}
+        {"lat": lat, "lon": lon, "label": name}
         for name, lat, lon in STATIONS
     ]
     all_points = map_points + station_points
@@ -376,7 +375,7 @@ if map_points:
     )
     marker_layer = pdk.Layer(
         "ScatterplotLayer",
-        data=all_points,
+        data=map_points,
         get_position="[lon, lat]",
         get_radius=180,
         get_fill_color="color",
@@ -384,7 +383,7 @@ if map_points:
     )
     label_layer = pdk.Layer(
         "TextLayer",
-        data=all_points,
+        data=map_points,
         get_position="[lon, lat]",
         get_text="label",
         get_size=10,
@@ -395,13 +394,28 @@ if map_points:
         font_family=quoted_font_family,
         font_weight=700,
     )
+    station_layer = pdk.Layer(
+        "TextLayer",
+        data=station_points,
+        get_position="[lon, lat]",
+        get_text="label",
+        get_size=10,
+        get_color=[255, 255, 255],
+        get_alignment_baseline="'center'",
+        character_set=quoted_char_set,
+        font_family=quoted_font_family,
+        font_weight=700,
+        background=True,
+        get_background_color=COLOR_STATION,
+        background_padding=[6, 4],
+    )
     view_state = pdk.ViewState(
         latitude=sum(p["lat"] for p in all_points) / len(all_points),
         longitude=sum(p["lon"] for p in all_points) / len(all_points),
         zoom=11,
     )
     st.pydeck_chart(pdk.Deck(
-        layers=[line_layer, marker_layer, label_layer],
+        layers=[line_layer, marker_layer, label_layer, station_layer],
         initial_view_state=view_state,
         map_style=pdk.map_styles.LIGHT_NO_LABELS,
     ))
