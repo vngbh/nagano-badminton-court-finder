@@ -212,11 +212,11 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
 st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="wide")
 
 st.markdown(
-    """<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    """<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
     <style>
     #MainMenu, header, footer {visibility: hidden;}
     [data-testid="stApp"] * {
-        font-family: 'BIZ UDPGothic', 'Meiryo', 'Hiragino Sans', 'Noto Sans JP', sans-serif !important;
+        font-family: 'BIZ UDPGothic' !important;
     }
     </style>""",
     unsafe_allow_html=True,
@@ -385,7 +385,7 @@ if map_points:
     # Wrapping in quotes keeps pydeck from mangling it into a data-field accessor.
     label_chars = "".join(sorted({c for p in all_points for c in p["label"]}))
     quoted_char_set = "'" + label_chars + "'"
-    quoted_font_family = '"' + "'BIZ UDPGothic', 'Meiryo', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif" + '"'
+    quoted_font_family = '"' + "'BIZ UDPGothic'" + '"'
 
     line_layer = pdk.Layer(
         "PathLayer",
@@ -439,7 +439,7 @@ if map_points:
         unsafe_allow_html=True,
     )
     with st.container(key="map_box"):
-        st.markdown(f'<div class="map-date-badge">{date_str}　（{wd}）</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="map-date-badge">{date_str} （{wd}）</div>', unsafe_allow_html=True)
         st.pydeck_chart(pdk.Deck(
             layers=[line_layer, badge_layer],
             initial_view_state=view_state,
