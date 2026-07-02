@@ -209,12 +209,16 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
 
 # ── Page setup ───────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="wide")
+st.set_page_config(page_title="長野 バドミントンコート空き検索", page_icon="🜸", layout="wide")
 
 st.markdown(
     """<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
     <style>
     #MainMenu, header, footer {visibility: hidden;}
+    [data-testid="stStatusWidget"], [data-testid="stAppViewerBadge"],
+    .stAppDeployButton, div[class*="viewerBadge"] {
+        display: none !important;
+    }
     [data-testid="stApp"] * {
         font-family: 'BIZ UDPGothic' !important;
     }
@@ -444,7 +448,7 @@ if map_points:
             layers=[line_layer, badge_layer],
             initial_view_state=view_state,
             map_style=pdk.map_styles.LIGHT_NO_LABELS,
-        ))
+        ), height=625)
 
     def legend_swatch(color: list[int], label: str) -> str:
         r, g, b = color
