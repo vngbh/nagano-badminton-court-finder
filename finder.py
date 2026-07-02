@@ -209,7 +209,11 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
 
 # ── Page setup ───────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="長野 バドミントンコート空き検索", page_icon="🜸", layout="wide")
+st.set_page_config(
+    page_title="長野 バドミントンコート空き検索",
+    page_icon="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/badminton/default/48px.svg",
+    layout="wide",
+)
 
 st.markdown(
     """<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
@@ -247,11 +251,19 @@ st.subheader("長野市バドミントンコート空き検索")
 st.caption("距離基準：長野駅")
 
 st.markdown(
-    """<style>button[kind="secondary"] {
+    """<style>
+    button[kind="secondary"] {
         background-color: #dc2828 !important;
         color: white !important;
         border-color: #dc2828 !important;
-    }</style>""",
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    button[kind="secondary"]:hover {
+        background-color: #b81f1f !important;
+        border-color: #b81f1f !important;
+        color: white !important;
+    }
+    </style>""",
     unsafe_allow_html=True,
 )
 
@@ -448,7 +460,7 @@ if map_points:
             layers=[line_layer, badge_layer],
             initial_view_state=view_state,
             map_style=pdk.map_styles.LIGHT_NO_LABELS,
-        ), height=625)
+        ), height=781)
 
     def legend_swatch(color: list[int], label: str) -> str:
         r, g, b = color
