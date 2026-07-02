@@ -357,6 +357,13 @@ if map_points:
     ]
     all_points = map_points + station_points
 
+    # deck.gl's TextLayer only pre-renders ASCII glyphs by default, so Japanese
+    # labels render invisible unless the actual character set is passed explicitly.
+    # Wrapping in quotes keeps pydeck from mangling it into a data-field accessor.
+    label_chars = "".join(sorted({c for p in all_points for c in p["label"]}))
+    quoted_char_set = "'" + label_chars + "'"
+    quoted_font_family = '"' + "'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif" + '"'
+
     line_layer = pdk.Layer(
         "PathLayer",
         data=[{"path": [[lon, lat] for _, lat, lon in STATIONS]}],
@@ -381,14 +388,20 @@ if map_points:
         get_size=14,
         get_color=[30, 30, 30],
         get_pixel_offset=[0, -14],
-        alignment_baseline="bottom",
+        get_alignment_baseline="'bottom'",
+        character_set=quoted_char_set,
+        font_family=quoted_font_family,
     )
     view_state = pdk.ViewState(
         latitude=sum(p["lat"] for p in all_points) / len(all_points),
         longitude=sum(p["lon"] for p in all_points) / len(all_points),
         zoom=11,
     )
-    st.pydeck_chart(pdk.Deck(layers=[line_layer, marker_layer, label_layer], initial_view_state=view_state))
+    st.pydeck_chart(pdk.Deck(
+        layers=[line_layer, marker_layer, label_layer],
+        initial_view_state=view_state,
+        map_style=pdk.map_styles.LIGHT_NO_LABELS,
+    ))
 
     def legend_dot(color: list[int], label: str) -> str:
         r, g, b = color
