@@ -432,7 +432,6 @@ if map_points:
             background-color: #3a3a3a;
             color: white;
             padding: 4px 10px;
-            border-radius: 4px;
             font-weight: 700;
             font-size: 0.85rem;
         }
@@ -440,7 +439,7 @@ if map_points:
         unsafe_allow_html=True,
     )
     with st.container(key="map_box"):
-        st.markdown(f'<div class="map-date-badge">{date_str}（{wd}）</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="map-date-badge">{date_str}　（{wd}）</div>', unsafe_allow_html=True)
         st.pydeck_chart(pdk.Deck(
             layers=[line_layer, badge_layer],
             initial_view_state=view_state,
