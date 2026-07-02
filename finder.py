@@ -1,4 +1,5 @@
 import streamlit as st
+import pydeck as pdk
 import requests
 import re
 import json
@@ -15,9 +16,13 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# 信州大学工学部（長野市若里4丁目17-1）— 国土地理院で確認済み
-REF_LAT = 36.63179
-REF_LON = 138.187378
+# 長野駅 — 距離の基準点、地図の目印として常に表示
+REF_LAT = STATION_LAT = 36.643809
+REF_LON = STATION_LON = 138.187750
+
+COLOR_PAID = [220, 40, 40]
+COLOR_FREE = [46, 160, 67]
+COLOR_STATION = [24, 119, 242]
 
 COORDS_FILE = os.path.join(os.path.dirname(__file__), "coords_cache.json")
 
@@ -257,7 +262,7 @@ with st.sidebar:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 st.subheader("長野市バドミントンコート空き検索")
-st.caption("距離基準：信州大学工学部（長野市若里４丁目１７ー１）")
+st.caption("距離基準：長野駅")
 
 if not search:
     st.stop()
@@ -316,13 +321,57 @@ free = [r for r in results if r["価格"] == 0]
 
 weekday_jp = ["月", "火", "水", "木", "金", "土", "日"]
 wd = weekday_jp[selected_date.weekday()]
-st.markdown(f"**{date_str}（{wd}）** — 有料 {len(paid)} 件 / 無料 {len(free)} 件")
+st.markdown(f"**{date_str}（{wd}）**")
 
 # ── Map ──────────────────────────────────────────────────────────────────────
 
-map_points = {(r["lat"], r["lon"]) for r in results if r["lat"] is not None and r["lon"] is not None}
+paid_fnames = {r["施設名"] for r in paid}
+free_fnames = {r["施設名"] for r in free}
+
+facility_number: dict[str, int] = {}
+map_points = []
+for r in results:
+    fname = r["施設名"]
+    if fname in facility_number or r["lat"] is None or r["lon"] is None:
+        continue
+    facility_number[fname] = len(facility_number) + 1
+    color = COLOR_PAID if fname in paid_fnames else COLOR_FREE
+    map_points.append({
+        "lat": r["lat"],
+        "lon": r["lon"],
+        "label": f"{facility_number[fname]}. {fname}",
+        "color": color,
+    })
+
 if map_points:
-    st.map([{"lat": lat, "lon": lon} for lat, lon in map_points], size=40)
+    station_point = {"lat": STATION_LAT, "lon": STATION_LON, "label": "長野駅", "color": COLOR_STATION}
+    all_points = map_points + [station_point]
+
+    marker_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=all_points,
+        get_position="[lon, lat]",
+        get_radius=90,
+        get_fill_color="color",
+        pickable=True,
+    )
+    label_layer = pdk.Layer(
+        "TextLayer",
+        data=all_points,
+        get_position="[lon, lat]",
+        get_text="label",
+        get_size=14,
+        get_color=[30, 30, 30],
+        get_pixel_offset=[0, -14],
+        alignment_baseline="bottom",
+    )
+    view_state = pdk.ViewState(
+        latitude=sum(p["lat"] for p in all_points) / len(all_points),
+        longitude=sum(p["lon"] for p in all_points) / len(all_points),
+        zoom=11,
+    )
+    st.pydeck_chart(pdk.Deck(layers=[marker_layer, label_layer], initial_view_state=view_state))
+    st.caption("🔴 有料あり　🟢 無料のみ　🔵 長野駅")
 
 st.divider()
 
@@ -337,7 +386,9 @@ def render_results(rows: list[dict], container) -> None:
         if r["施設名"] != prev:
             dist = r["距離(km)"]
             dist_str = f"{dist} km" if dist is not None else "距離不明"
-            container.markdown(f"**{r['施設名']}** &nbsp; `{dist_str}`")
+            num = facility_number.get(r["施設名"])
+            num_str = f"№{num} " if num else ""
+            container.markdown(f"**{num_str}{r['施設名']}** &nbsp; `{dist_str}`")
             prev = r["施設名"]
         c1, c2, c3, c4 = container.columns([3, 2, 2, 1])
         c1.write(r["部屋"])
