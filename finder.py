@@ -303,6 +303,7 @@ with ThreadPoolExecutor(max_workers=15) as executor:
                 continue
             price = extract_price(slot.get("title", ""))
             results.append({
+                "fid":      room["fid"],
                 "施設名":   room["fname"],
                 "部屋":     room["rname"],
                 "開始":     s_start,
@@ -344,12 +345,10 @@ for r in results:
         continue
     seen_fnames.add(fname)
     color = COLOR_PAID if fname in paid_fnames else COLOR_FREE
-    dist = r["距離(km)"]
-    label = f"{fname} ({dist}km)" if dist is not None else fname
     map_points.append({
         "lat": r["lat"],
         "lon": r["lon"],
-        "label": label,
+        "label": str(r["fid"]),
         "color": color,
     })
 
