@@ -412,16 +412,15 @@ if map_points:
     )
     st.markdown(
         """<style>
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.map-date-badge),
-        div[data-testid="stVerticalBlock"]:has(.map-date-badge) {
+        .st-key-map_box {
             position: relative;
         }
         .map-date-badge {
             position: absolute;
-            top: 8px;
-            left: 24px;
+            top: 16px;
+            left: 32px;
             z-index: 1000;
-            background-color: #dc2828;
+            background-color: #3a3a3a;
             color: white;
             padding: 4px 10px;
             border-radius: 4px;
@@ -431,7 +430,7 @@ if map_points:
         </style>""",
         unsafe_allow_html=True,
     )
-    with st.container():
+    with st.container(key="map_box"):
         st.markdown(f'<div class="map-date-badge">{date_str}（{wd}）</div>', unsafe_allow_html=True)
         st.pydeck_chart(pdk.Deck(
             layers=[line_layer, badge_layer],
