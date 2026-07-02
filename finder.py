@@ -236,7 +236,16 @@ if not st.session_state.get("authenticated"):
 st.subheader("長野市バドミントンコート空き検索")
 st.caption("距離基準：長野駅")
 
-col_date, col_time, col_dist, col_search = st.columns([2, 3, 2, 1])
+st.markdown(
+    """<style>button[kind="secondary"] {
+        background-color: #dc2828 !important;
+        color: white !important;
+        border-color: #dc2828 !important;
+    }</style>""",
+    unsafe_allow_html=True,
+)
+
+col_date, col_time, col_dist, col_search, col_refresh = st.columns([2, 3, 2, 1, 1])
 with col_date:
     selected_date = st.date_input(
         "日付",
@@ -264,12 +273,11 @@ with col_dist:
 with col_search:
     st.write("")
     search = st.button("検索", type="primary", use_container_width=True)
-
-with st.expander("施設一覧の更新"):
+with col_refresh:
+    st.write("")
     if st.button("施設一覧を更新", use_container_width=True):
         st.session_state.pop("rooms", None)
         st.rerun()
-    st.caption("施設・部屋情報は 24 時間キャッシュされます")
 
 if not search:
     st.stop()
@@ -377,7 +385,7 @@ if map_points:
         data=all_points,
         get_position="[lon, lat]",
         get_text="label",
-        get_size=10,
+        get_size=12.5,
         get_color=[255, 255, 255],
         get_alignment_baseline="'center'",
         character_set=quoted_char_set,
@@ -385,7 +393,7 @@ if map_points:
         font_weight=700,
         background=True,
         get_background_color="color",
-        background_padding=[6, 4],
+        background_padding=[7.5, 5],
         pickable=True,
     )
     view_state = pdk.ViewState(
