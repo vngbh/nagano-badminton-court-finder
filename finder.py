@@ -25,6 +25,7 @@ STATIONS = [
     ("篠ノ井駅", 36.580475, 138.143280),
     ("長野駅", 36.643809, 138.187750),
     ("北長野駅", 36.649345, 138.242966),
+    ("豊野駅", 36.717712, 138.276352),
 ]
 
 COLOR_PAID = [220, 40, 40]
@@ -343,10 +344,12 @@ for r in results:
         continue
     seen_fnames.add(fname)
     color = COLOR_PAID if fname in paid_fnames else COLOR_FREE
+    dist = r["距離(km)"]
+    label = f"{fname} ({dist}km)" if dist is not None else fname
     map_points.append({
         "lat": r["lat"],
         "lon": r["lon"],
-        "label": fname,
+        "label": label,
         "color": color,
     })
 
@@ -376,7 +379,7 @@ if map_points:
         "ScatterplotLayer",
         data=all_points,
         get_position="[lon, lat]",
-        get_radius=90,
+        get_radius=180,
         get_fill_color="color",
         pickable=True,
     )
@@ -385,8 +388,8 @@ if map_points:
         data=all_points,
         get_position="[lon, lat]",
         get_text="label",
-        get_size=14,
-        get_color=[30, 30, 30],
+        get_size=7,
+        get_color="color",
         get_pixel_offset=[0, -14],
         get_alignment_baseline="'bottom'",
         character_set=quoted_char_set,
