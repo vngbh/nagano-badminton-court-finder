@@ -1,5 +1,6 @@
 import streamlit as st
 import pydeck as pdk
+import pykakasi
 import requests
 import re
 import json
@@ -33,6 +34,91 @@ COLOR_FREE = [46, 160, 67]
 COLOR_STATION = [24, 119, 242]
 
 COORDS_FILE = os.path.join(os.path.dirname(__file__), "coords_cache.json")
+
+WEEKDAY_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+_kakasi = pykakasi.kakasi()
+_JP_LITERAL_RE = re.compile(r"^[\d\-./\s　]+$")
+
+
+def _romanize_core(text: str) -> str:
+    """Best-effort kanji/kana -> uppercase Hepburn romaji, hyphen-joined."""
+    pieces: list[str] = []
+    prev_kind = None
+    for token in _kakasi.convert(text):
+        orig = token["orig"]
+        if _JP_LITERAL_RE.match(orig):
+            val, kind = orig.strip(), "literal"
+        else:
+            val, kind = token["hepburn"].upper(), "kana"
+        if not val:
+            continue
+        if kind == "kana" and prev_kind == "kana":
+            pieces[-1] = f"{pieces[-1]}-{val}"
+        else:
+            pieces.append(val)
+        prev_kind = kind
+    return " ".join(pieces)
+
+
+def romanize_facility_name(name: str) -> str:
+    """e.g. 更北体育館 -> KOUHOKU-TAIIKUKAN（更北体育館） — automated, so the
+    original Japanese is always kept alongside for cross-checking."""
+    return f"{_romanize_core(name)}（{name}）"
+
+
+def romanize_station_label(name: str) -> str:
+    base = name[:-1] if name.endswith("駅") else name
+    return f"{_romanize_core(base)} Sta."
+
+
+ROOM_NAME_TRANSLATIONS = [
+    ("メインアリーナ", "Main Arena"),
+    ("サブアリーナ", "Sub Arena"),
+    ("大体育室", "Large Gym Room"),
+    ("小体育室", "Small Gym Room"),
+    ("多目的室", "Multipurpose Room"),
+    ("トレーニング室", "Training Room"),
+    ("卓球場", "Table Tennis Room"),
+    ("卓球室", "Table Tennis Room"),
+    ("柔道場", "Judo Room"),
+    ("剣道場", "Kendo Room"),
+    ("弓道場", "Archery Range"),
+    ("武道場", "Martial Arts Room"),
+    ("全面", "Full Court"),
+    ("半面", "Half Court"),
+    ("中央", "Center"),
+    ("東側", "East Side"),
+    ("西側", "West Side"),
+    ("南側", "South Side"),
+    ("北側", "North Side"),
+    ("東", "East"),
+    ("西", "West"),
+    ("南", "South"),
+    ("北", "North"),
+    ("第一", "1st"),
+    ("第二", "2nd"),
+    ("第三", "3rd"),
+]
+
+
+def translate_room_name(name: str) -> str:
+    for jp, en in ROOM_NAME_TRANSLATIONS:
+        name = name.replace(jp, en)
+    return name
+
+
+PRICE_TEXT_TRANSLATIONS = [
+    ("先着", "First-come"),
+    ("抽選", "Raffle"),
+    ("無料", "Free"),
+]
+
+
+def translate_price_text(text: str) -> str:
+    for jp, en in PRICE_TEXT_TRANSLATIONS:
+        text = text.replace(jp, en)
+    return text
 
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -94,7 +180,7 @@ def extract_price(title: str) -> int | None:
 def discover_rooms() -> list[dict]:
     if "rooms" in st.session_state:
         return st.session_state["rooms"]
-    with st.spinner("施設・部屋情報を取得中..."):
+    with st.spinner("Fetching facility and room information..."):
         st.session_state["rooms"] = _fetch_rooms()
     return st.session_state["rooms"]
 
@@ -209,7 +295,7 @@ def slot_in_time_range(start_str: str, end_str: str, f_start: dtime, f_end: dtim
 
 # ── Page setup ───────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="長野 バドミントンコート空き検索", layout="wide")
+st.set_page_config(page_title="Nagano Badminton Court Finder", layout="wide")
 
 st.markdown(
     """<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
@@ -225,22 +311,22 @@ st.markdown(
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
 if not st.session_state.get("authenticated"):
-    st.subheader("ログイン")
+    st.subheader("Login")
     with st.form("login_form"):
         username = st.text_input("ID")
-        password = st.text_input("パスワード", type="password")
-        if st.form_submit_button("ログイン", type="primary", use_container_width=True):
+        password = st.text_input("Password", type="password")
+        if st.form_submit_button("Login", type="primary", use_container_width=True):
             if username == st.secrets["auth"]["username"] and password == st.secrets["auth"]["password"]:
                 st.session_state["authenticated"] = True
                 st.rerun()
             else:
-                st.error("IDまたはパスワードが違います")
+                st.error("Incorrect ID or password")
     st.stop()
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-st.subheader("長野市バドミントンコート空き検索")
-st.caption("距離基準：長野駅")
+st.subheader("Nagano City Badminton Court Availability Search")
+st.caption("Distance reference: Nagano Station")
 
 st.markdown(
     """<style>button[kind="secondary"] {
@@ -256,13 +342,13 @@ col_date, col_time, col_dist, col_search, col_refresh = st.columns(
 )
 with col_date:
     selected_date = st.date_input(
-        "日付",
+        "Date",
         min_value=date.today(),
         value=date.today() + timedelta(days=1),
     )
 with col_time:
     time_range = st.slider(
-        "利用時間帯",
+        "Time range",
         min_value=dtime(6, 0),
         max_value=dtime(23, 0),
         value=(dtime(8, 0), dtime(22, 0)),
@@ -272,16 +358,16 @@ with col_time:
     filter_time_start, filter_time_end = time_range
 with col_dist:
     max_dist_km = st.slider(
-        "最大距離 (km)",
+        "Max distance (km)",
         min_value=0.0,
         max_value=30.0,
         value=20.0,
         step=0.5,
     )
 with col_search:
-    search = st.button("検索", type="primary", use_container_width=True)
+    search = st.button("Search", type="primary", use_container_width=True)
 with col_refresh:
-    if st.button("施設一覧を更新", use_container_width=True):
+    if st.button("Refresh facility list", use_container_width=True):
         st.session_state.pop("rooms", None)
         st.rerun()
 
@@ -290,7 +376,7 @@ if search:
     rooms = discover_rooms()
 
     if not rooms:
-        st.error("施設情報を取得できませんでした。しばらくしてから再試行してください。")
+        st.error("Failed to fetch facility information. Please try again later.")
         st.stop()
 
     rooms_in_range = [
@@ -299,7 +385,7 @@ if search:
     ]
 
     results: list[dict] = []
-    bar = st.progress(0, text="確認中...")
+    bar = st.progress(0, text="Checking...")
 
     with ThreadPoolExecutor(max_workers=15) as executor:
         futures = {executor.submit(fetch_slots, r, date_str): r for r in rooms_in_range}
@@ -324,22 +410,21 @@ if search:
                     "予約URL":  f"{BASE_URL}/rooms/{room['rid']}/reservation_calendar?date={date_str}",
                 })
             bar.progress((i + 1) / len(rooms_in_range),
-                         text=f"確認中 {i + 1}/{len(rooms_in_range)} 室")
+                         text=f"Checking {i + 1}/{len(rooms_in_range)} rooms")
 
     bar.empty()
     results.sort(key=sort_key)
 
-    weekday_jp = ["月", "火", "水", "木", "金", "土", "日"]
     st.session_state["last_search"] = {
         "results": results,
         "date_str": date_str,
-        "weekday": weekday_jp[selected_date.weekday()],
+        "weekday": WEEKDAY_EN[selected_date.weekday()],
     }
 
 # 検索ボタンを押していなくても、直前の検索結果はそのまま表示を続ける
 # （日付・時間を変えただけで結果が消えるとUXが悪いため）
 if "last_search" not in st.session_state:
-    st.info("日付・条件を選んで「検索」を押してください")
+    st.info("Select a date and filters, then press \"Search\".")
     st.stop()
 
 results = st.session_state["last_search"]["results"]
@@ -347,7 +432,7 @@ date_str = st.session_state["last_search"]["date_str"]
 wd = st.session_state["last_search"]["weekday"]
 
 if not results:
-    st.warning(f"{date_str} は条件に合う空き枠が見つかりませんでした")
+    st.warning(f"No available slots found for {date_str} matching your filters")
     st.stop()
 
 paid = [r for r in results if r["価格"] is None or r["価格"] > 0]
@@ -375,7 +460,7 @@ for r in results:
 
 if map_points:
     station_points = [
-        {"lat": lat, "lon": lon, "label": name, "color": COLOR_STATION}
+        {"lat": lat, "lon": lon, "label": romanize_station_label(name), "color": COLOR_STATION}
         for name, lat, lon in STATIONS
     ]
     all_points = map_points + station_points
@@ -440,7 +525,7 @@ if map_points:
         unsafe_allow_html=True,
     )
     with st.container(key="map_box"):
-        st.markdown(f'<div class="map-date-badge">{date_str}（{wd}）</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="map-date-badge">{date_str} ({wd})</div>', unsafe_allow_html=True)
         st.pydeck_chart(pdk.Deck(
             layers=[line_layer, badge_layer],
             initial_view_state=view_state,
@@ -457,9 +542,9 @@ if map_points:
 
     st.markdown(
         f'<div style="font-size:0.8rem;color:gray;">'
-        f'{legend_swatch(COLOR_PAID, "有料")}'
-        f'{legend_swatch(COLOR_FREE, "無料")}'
-        f'{legend_swatch(COLOR_STATION, "駅")}'
+        f'{legend_swatch(COLOR_PAID, "Paid")}'
+        f'{legend_swatch(COLOR_FREE, "Free")}'
+        f'{legend_swatch(COLOR_STATION, "Station")}'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -470,22 +555,22 @@ st.divider()
 
 def render_results(rows: list[dict], container) -> None:
     if not rows:
-        container.info("該当なし")
+        container.info("No results")
         return
     prev = None
     for r in rows:
         if r["施設名"] != prev:
             dist = r["距離(km)"]
-            dist_str = f"{dist} km" if dist is not None else "距離不明"
-            container.markdown(f"**{r['施設名']}** &nbsp; `{dist_str}`")
+            dist_str = f"{dist} km" if dist is not None else "Unknown distance"
+            container.markdown(f"**{romanize_facility_name(r['施設名'])}** &nbsp; `{dist_str}`")
             prev = r["施設名"]
         c1, c2, c3, c4 = container.columns([3, 2, 2, 1])
-        c1.write(r["部屋"])
+        c1.write(translate_room_name(r["部屋"]))
         c2.write(f"{r['開始']} – {r['終了']}")
-        c3.write(r["料金"])
-        c4.markdown(f"[予約]({r['予約URL']})")
+        c3.write(translate_price_text(r["料金"]))
+        c4.markdown(f"[Book]({r['予約URL']})")
     container.write("")
 
-tab_paid, tab_free = st.tabs([f"有料 ({len(paid)}件)", f"無料 ({len(free)}件)"])
+tab_paid, tab_free = st.tabs([f"Paid ({len(paid)})", f"Free ({len(free)})"])
 render_results(paid, tab_paid)
 render_results(free, tab_free)
